@@ -1,0 +1,14 @@
+package com.Ottify.OTTify_batch.program.batch.movie.dto;
+
+import lombok.Getter;
+
+@Getter
+public class TmDbGenreInfo {
+    private Long id;
+    private String name;
+
+    public void changeName(String name){
+        this.name= name;
+
+    }
+}
