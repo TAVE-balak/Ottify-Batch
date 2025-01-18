@@ -146,7 +146,7 @@ public class MovieUpdateJobConfig {
                         || openApiMovieDetailDto.getProductionCountries().isEmpty())
                         ? null : openApiMovieDetailDto.getProductionCountries().get(0).getName();
 
-                return programRepository.findByTmDbProgramIdWithGenres(movieId).map(program->{
+                return programRepository.findByTmDbProgramIdAndTypeWithGenre(movieId,ProgramType.Movie).map(program->{
                     program.update(openApiMovieDetailDto.getTitle(), openApiMovieDetailDto.getPoster_path(),
                             openApiMovieDetailDto.getReleaseDate().length() >= 4 ? openApiMovieDetailDto.getReleaseDate().substring(0, 4) : null,
                             openApiMovieDetailDto.getReleaseDate(),originalCountryName,openApiMovieDetailDto.getOriginal_title(),
@@ -165,7 +165,7 @@ public class MovieUpdateJobConfig {
             }catch (WebClientResponseException e){
                 if(e.getMessage().contains("404 Not Found")){
                     log.info("삭제된 영화 아이디 {}",movieId);
-                    return programRepository.findByTmDbProgramId(movieId)
+                    return programRepository.findByTmDbProgramIdAndType(movieId,ProgramType.Movie)
                             .map(program -> {
                                 program.makeWillDelete();
                                 return program;
