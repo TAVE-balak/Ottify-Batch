@@ -23,6 +23,8 @@ import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.integration.async.AsyncItemProcessor;
 import org.springframework.batch.integration.async.AsyncItemWriter;
 import org.springframework.batch.item.ItemProcessor;
+import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider;
+import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.JpaItemWriter;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
@@ -51,9 +53,9 @@ public class MovieBasicSaveJobConfig {
     private final GenreRepository genreRepository;
 
     @Bean
-    public Job movieBasicSaveJob(Step movieStep) {
+    public Job movieBasicSaveJob(Step movieBasicSaveStep) {
         return new JobBuilder("movieBasicSaveJob",jobRepository)
-                .start(movieStep)
+                .start(movieBasicSaveStep)
                 .build();
     }
 
