@@ -68,9 +68,6 @@ public class Program {
         this.willDeleted= false;
     }
 
-    public void addReviewCount(){
-        this.reviewCount++;
-    }
 
     @OneToMany(mappedBy = "program", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ProgramGenre> programGenreList = new ArrayList<>();
