@@ -20,6 +20,7 @@ public class MovieBatchController {
     @GetMapping("/movie/all")
     public ResponseEntity<Void> saveAll() {
 
+        //batch 시작 한번만
         try{
             log.info("Starting exampleJob...");
             jobLauncher.run(movieBasicSaveJob, new JobParametersBuilder()
