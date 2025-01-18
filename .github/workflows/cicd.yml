@@ -27,7 +27,6 @@ jobs:
       - name: Create application.yml
 
         run: |
-          mkdir ./src/main/resources
           touch ./src/main/resources/application.yml
           echo "${{ secrets.DEV_APPLICATION }}" > ./src/main/resources/application.yml
           cat ./src/main/resources/application.yml
