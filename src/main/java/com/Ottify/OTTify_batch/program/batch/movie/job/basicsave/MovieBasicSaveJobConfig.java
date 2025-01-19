@@ -74,6 +74,7 @@ public class MovieBasicSaveJobConfig {
                 .backOffPolicy(new FixedBackOffPolicy() {{
                     setBackOffPeriod(2000); // 2초 대기
                 }})
+                .noRetry(NotFoundException.class)
                 .allowStartIfComplete(true)
                 .build();
     }
