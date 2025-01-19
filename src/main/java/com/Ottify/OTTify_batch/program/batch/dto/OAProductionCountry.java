@@ -1,4 +1,4 @@
-package com.Ottify.OTTify_batch.program.batch.movie.dto;
+package com.Ottify.OTTify_batch.program.batch.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;

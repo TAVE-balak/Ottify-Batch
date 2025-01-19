@@ -1,26 +1,29 @@
-package com.Ottify.OTTify_batch.program.batch.movie.dto;
+package com.Ottify.OTTify_batch.program.batch.tv.dto;
 
 import com.Ottify.OTTify_batch.program.batch.dto.OAProductionCountry;
 import com.Ottify.OTTify_batch.program.batch.dto.TmDbGenreInfo;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class OpenApiMovieDetailDto {
+public class OpenApiTVDetailDto {
 
-    private String title;
+    @JsonProperty("original_name")
+    private String originalName;
+
+    private String name;
+
+    @JsonProperty("first_air_date")
+    private String firstAirDate;
+
     private String poster_path;
     private String overview;
     private String tagline;
-    private String original_title;
     private String backdrop_path;
-    @JsonProperty("release_date")
-    private String releaseDate;
 
     @JsonProperty("genres")
     public List<TmDbGenreInfo> tmDbGenreInfos;
@@ -28,15 +31,5 @@ public class OpenApiMovieDetailDto {
     @JsonProperty("production_countries")
     private List<OAProductionCountry> productionCountries;
 
-    @Builder
-    OpenApiMovieDetailDto(String title){
-        this.title = title;
-    }
-
 
 }
-
-
-
-
-
