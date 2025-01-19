@@ -1,9 +1,11 @@
-package com.Ottify.OTTify_batch.program.batch.movie.job.basicsave;
-
+package com.Ottify.OTTify_batch.program.batch.tv.job.basicsave;
 
 import com.Ottify.OTTify_batch.program.batch.movie.dto.OpenApiMovieDetailDto;
 import com.Ottify.OTTify_batch.program.batch.movie.job.basicsave.dto.MovieJsonReadDto;
 import com.Ottify.OTTify_batch.program.batch.movie.job.basicsave.reader.JsonLineMapper;
+import com.Ottify.OTTify_batch.program.batch.tv.dto.OpenApiTVDetailDto;
+import com.Ottify.OTTify_batch.program.batch.tv.job.basicsave.dto.TVJsonReadDto;
+import com.Ottify.OTTify_batch.program.batch.tv.job.basicsave.reader.TVJsonLineMapper;
 import com.Ottify.OTTify_batch.program.entity.Genre;
 import com.Ottify.OTTify_batch.program.entity.Program;
 import com.Ottify.OTTify_batch.program.entity.ProgramType;
@@ -11,20 +13,16 @@ import com.Ottify.OTTify_batch.program.repository.GenreRepository;
 import com.Ottify.OTTify_batch.program.repository.ProgramRepository;
 import jakarta.persistence.EntityManagerFactory;
 import java.util.concurrent.Future;
-import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
-
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.integration.async.AsyncItemProcessor;
 import org.springframework.batch.integration.async.AsyncItemWriter;
 import org.springframework.batch.item.ItemProcessor;
-import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider;
-import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.JpaItemWriter;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
@@ -34,7 +32,6 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.data.crossstore.ChangeSetPersister.NotFoundException;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.retry.backoff.FixedBackOffPolicy;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -43,7 +40,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 @Slf4j
 @Configuration
 @RequiredArgsConstructor
-public class MovieBasicSaveJobConfig {
+public class TvBasicSaveJobConfig {
 
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
@@ -54,19 +51,19 @@ public class MovieBasicSaveJobConfig {
     private final TaskExecutor apiExecutor;
 
     @Bean
-    public Job movieBasicSaveJob(Step movieBasicSaveStep) {
-        return new JobBuilder("movieBasicSaveJob",jobRepository)
-                .start(movieBasicSaveStep)
+    public Job tvBasicSaveJob(Step tvBasicSaveStep) {
+        return new JobBuilder("tvBasicSaveJob",jobRepository)
+                .start(tvBasicSaveStep)
                 .build();
     }
 
     @Bean
-    public Step movieBasicSaveStep() {
-        return new StepBuilder("movieBasicSaveStep",jobRepository)
-                .<MovieJsonReadDto, Future<Program>>chunk(50,transactionManager)
-                .reader(jsonMovieItemReader())
-                .processor(asyncMovieApiProcessor())
-                .writer(asyncJpaMovieBasicSaveWriter())
+    public Step tvBasicSaveStep() {
+        return new StepBuilder("tvBasicSaveStep",jobRepository)
+                .<TVJsonReadDto, Future<Program>>chunk(50,transactionManager)
+                .reader(jsonTVItemReader())
+                .processor(asyncTVApiProcessor())
+                .writer(asyncJpaTVBasicSaveWriter())
                 .faultTolerant()
                 .skip(NotFoundException.class)
                 .skipLimit(Integer.MAX_VALUE)
@@ -83,21 +80,21 @@ public class MovieBasicSaveJobConfig {
 
     /* reader */
     @Bean
-    public FlatFileItemReader<MovieJsonReadDto> jsonMovieItemReader() {
+    public FlatFileItemReader<TVJsonReadDto> jsonTVItemReader() {
 
-        return new FlatFileItemReaderBuilder<MovieJsonReadDto>()
-                .name("movieIdReader")
-                .resource(new ClassPathResource("json/movie_ids_01_17_2025.json"))
-                .lineMapper(new JsonLineMapper())
+        return new FlatFileItemReaderBuilder<TVJsonReadDto>()
+                .name("tvIdReader")
+                .resource(new ClassPathResource("json/tv_series_ids_01_18_2025.json"))
+                .lineMapper(new TVJsonLineMapper())
                 .strict(false) // strict 모드를 비활성화
                 .build();
     }
 
     /* processor */
     @Bean
-    public AsyncItemProcessor<MovieJsonReadDto, Program> asyncMovieApiProcessor(){
-        final AsyncItemProcessor<MovieJsonReadDto,Program> processor = new AsyncItemProcessor<>();
-        processor.setDelegate(movieApiProcessor());
+    public AsyncItemProcessor<TVJsonReadDto, Program> asyncTVApiProcessor(){
+        final AsyncItemProcessor<TVJsonReadDto,Program> processor = new AsyncItemProcessor<>();
+        processor.setDelegate(tvApiProcessor());
         processor.setTaskExecutor(apiExecutor);
 
         return processor;
@@ -105,23 +102,23 @@ public class MovieBasicSaveJobConfig {
 
 
     @Bean
-    public ItemProcessor<MovieJsonReadDto,Program> movieApiProcessor(){
-        return new ItemProcessor<MovieJsonReadDto, Program>() {
+    public ItemProcessor<TVJsonReadDto,Program> tvApiProcessor(){
+        return new ItemProcessor<TVJsonReadDto, Program>() {
             @Override
-            public Program process(MovieJsonReadDto item) throws Exception {
-                long movieId= item.getId();
+            public Program process(TVJsonReadDto item) throws Exception {
+                long tvId= item.getId();
 
-                log.info("API 호출 현재 영화: {}",movieId);
+                log.info("API 호출 현재 TV: {}",tvId);
 
-                OpenApiMovieDetailDto openApiMovieDetailDto = getApiProgram(movieId);
+                OpenApiTVDetailDto openApiTVDetailDto = getApiProgram(tvId);
 
-                String originalCountryName = (openApiMovieDetailDto.getProductionCountries() == null
-                        || openApiMovieDetailDto.getProductionCountries().isEmpty())
-                        ? null : openApiMovieDetailDto.getProductionCountries().get(0).getName();
+                String originalCountryName = (openApiTVDetailDto.getProductionCountries() == null
+                        || openApiTVDetailDto.getProductionCountries().isEmpty())
+                        ? null : openApiTVDetailDto.getProductionCountries().get(0).getName();
 
-                Program program = getProgram(item, openApiMovieDetailDto, originalCountryName);
+                Program program = getProgram(item, openApiTVDetailDto, originalCountryName);
 
-                openApiMovieDetailDto.getTmDbGenreInfos().forEach(genreInfo -> {
+                openApiTVDetailDto.getTmDbGenreInfos().forEach(genreInfo -> {
                     Genre genre = genreRepository.findByTmDbGenreId(genreInfo.getId()).orElseThrow();
                     program.addGenre(genre);
                 });
@@ -133,20 +130,24 @@ public class MovieBasicSaveJobConfig {
 
             }
 
-            private Program getProgram(MovieJsonReadDto item, OpenApiMovieDetailDto openApiMovieDetailDto,
+            private Program getProgram(TVJsonReadDto item, OpenApiTVDetailDto openApiTVDetailDto,
                                        String originalCountryName) {
+
+                String year = openApiTVDetailDto.getFirstAirDate()==null?null:
+                        (openApiTVDetailDto.getFirstAirDate().length() >= 4 ? openApiTVDetailDto.getFirstAirDate().substring(0, 4) : null);
+
                 Program program = Program.builder()
                         .tmDbProgramId(item.getId())
-                        .title(openApiMovieDetailDto.getTitle())
-                        .originalTitle(openApiMovieDetailDto.getOriginal_title())
-                        .createdDate(openApiMovieDetailDto.getReleaseDate())
-                        .createdYear(openApiMovieDetailDto.getReleaseDate().length() >= 4 ? openApiMovieDetailDto.getReleaseDate().substring(0, 4) : null)
+                        .title(openApiTVDetailDto.getName())
+                        .originalTitle(openApiTVDetailDto.getOriginalName())
+                        .createdDate(openApiTVDetailDto.getFirstAirDate())
+                        .createdYear(year)
                         .originalCountry(originalCountryName)
-                        .backDropPath(openApiMovieDetailDto.getBackdrop_path())
-                        .type(ProgramType.Movie)
-                        .posterPath(openApiMovieDetailDto.getPoster_path())
-                        .overView(openApiMovieDetailDto.getOverview())
-                        .tagLine(openApiMovieDetailDto.getTagline())
+                        .backDropPath(openApiTVDetailDto.getBackdrop_path())
+                        .type(ProgramType.TV)
+                        .posterPath(openApiTVDetailDto.getPoster_path())
+                        .overView(openApiTVDetailDto.getOverview())
+                        .tagLine(openApiTVDetailDto.getTagline())
                         .build();
 
                 return program;
@@ -157,7 +158,7 @@ public class MovieBasicSaveJobConfig {
     /* writer */
 
     @Bean
-    public JpaItemWriter<Program> jpaMovieBasicSaveWriter(EntityManagerFactory entityManagerFactory) {
+    public JpaItemWriter<Program> jpaTVBasicSaveWriter(EntityManagerFactory entityManagerFactory) {
         JpaItemWriter<Program> writer = new JpaItemWriter<>();
         writer.setEntityManagerFactory(entityManagerFactory);
         return writer;
@@ -184,9 +185,9 @@ public class MovieBasicSaveJobConfig {
 //    }
 
     @Bean
-    public AsyncItemWriter<Program> asyncJpaMovieBasicSaveWriter(){
+    public AsyncItemWriter<Program> asyncJpaTVBasicSaveWriter(){
         final AsyncItemWriter<Program> writer = new AsyncItemWriter<>();
-        writer.setDelegate(jpaMovieBasicSaveWriter(entityManagerFactory));
+        writer.setDelegate(jpaTVBasicSaveWriter(entityManagerFactory));
 
         return writer;
     }
@@ -194,13 +195,13 @@ public class MovieBasicSaveJobConfig {
 
 
 
-    private OpenApiMovieDetailDto getApiProgram(long id) throws NotFoundException {
+    private OpenApiTVDetailDto getApiProgram(long id) throws NotFoundException {
 
         try{
-            OpenApiMovieDetailDto openApiProgramDto = webClient.get()
-                    .uri("/movie/"+id+"?language=ko")
+            OpenApiTVDetailDto openApiProgramDto = webClient.get()
+                    .uri("/tv/"+id+"?language=ko")
                     .retrieve()
-                    .bodyToMono(OpenApiMovieDetailDto.class)
+                    .bodyToMono(OpenApiTVDetailDto.class)
                     .block();
 
             return openApiProgramDto;
@@ -213,6 +214,4 @@ public class MovieBasicSaveJobConfig {
         return null;
 
     }
-
 }
-

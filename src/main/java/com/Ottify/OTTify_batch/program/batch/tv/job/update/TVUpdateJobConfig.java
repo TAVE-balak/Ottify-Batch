@@ -1,8 +1,11 @@
-package com.Ottify.OTTify_batch.program.batch.movie.job.update;
+package com.Ottify.OTTify_batch.program.batch.tv.job.update;
 
 import com.Ottify.OTTify_batch.program.batch.movie.dto.OpenApiMovieDetailDto;
 import com.Ottify.OTTify_batch.program.batch.movie.job.update.dto.ChangeMovieResultDto;
 import com.Ottify.OTTify_batch.program.batch.movie.job.update.dto.MovieChangeListDto;
+import com.Ottify.OTTify_batch.program.batch.tv.dto.OpenApiTVDetailDto;
+import com.Ottify.OTTify_batch.program.batch.tv.job.update.dto.ChangeTVResultDto;
+import com.Ottify.OTTify_batch.program.batch.tv.job.update.dto.TVChangeListDto;
 import com.Ottify.OTTify_batch.program.entity.Genre;
 import com.Ottify.OTTify_batch.program.entity.Program;
 import com.Ottify.OTTify_batch.program.entity.ProgramType;
@@ -27,7 +30,6 @@ import org.springframework.batch.item.database.JpaItemWriter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.data.crossstore.ChangeSetPersister.NotFoundException;
 import org.springframework.retry.backoff.FixedBackOffPolicy;
@@ -38,7 +40,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 @Slf4j
 @Configuration
 @RequiredArgsConstructor
-public class MovieUpdateJobConfig {
+public class TVUpdateJobConfig {
 
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
@@ -53,19 +55,19 @@ public class MovieUpdateJobConfig {
 
 
     @Bean
-    public Job movieUpdateJob() {
-        return new JobBuilder("movieUpdateJob",jobRepository)
-                .start(movieUpdateStep())
+    public Job tvUpdateJob() {
+        return new JobBuilder("yvUpdateJob",jobRepository)
+                .start(tvUpdateStep())
                 .build();
     }
 
     @Bean
-    public Step movieUpdateStep() {
-        return new StepBuilder("updateMovieStep",jobRepository)
+    public Step tvUpdateStep() {
+        return new StepBuilder("updateTVStep",jobRepository)
                 .<Long, Future<Program>>chunk(50,transactionManager)
-                .reader(changedMovieIdReader(null))
-                .processor(asyncUpdateItemProcessor())
-                .writer(asyncJpaUpdateWriter())
+                .reader(changedTVIdReader(null))
+                .processor(asyncUpdateTVProcessor())
+                .writer(asyncJpaTVUpdateWriter())
                 .faultTolerant()
                 .retry(Exception.class)
                 .retryLimit(3)
@@ -82,92 +84,95 @@ public class MovieUpdateJobConfig {
     // 당연하겠지만 @Value 와 함께 쓰려면 @StepScope 가 필수 일듯!
     @Bean
     @StepScope
-    public ItemReader<Long> changedMovieIdReader(@Value("#{jobParameters['date']}") String date) {
+    public ItemReader<Long> changedTVIdReader(@Value("#{jobParameters['date']}") String date) {
         return new ItemReader<Long>() {
             private int currentPage = 1;
-            private Iterator<ChangeMovieResultDto> movieResultIterator;
+            private Iterator<ChangeTVResultDto> tvResultIterator;
             private int totalPages;
 
             @Override
             public Long read() throws Exception {
-                if (movieResultIterator == null || !movieResultIterator.hasNext()) {
+                if (tvResultIterator == null || !tvResultIterator.hasNext()) {
                     if (totalPages > 0 && currentPage > totalPages) {
                         return null;
                     }
 
-                    MovieChangeListDto response = getChangedMovies(currentPage, date);
+                    TVChangeListDto response = getChangedTVS(currentPage, date);
 
                     if (totalPages == 0) {
                         totalPages = response.getTotal_pages();
                     }
 
-                    movieResultIterator = response.getResults().stream()
+                    tvResultIterator = response.getResults().stream()
                             .filter(movie -> !movie.isAdult())
                             .iterator();
 
                     currentPage++;
 
-                    if (!movieResultIterator.hasNext()) {
+                    if (!tvResultIterator.hasNext()) {
                         return null;
                     }
                 }
 
-                return movieResultIterator.hasNext() ? movieResultIterator.next().getId() : null;
+                return tvResultIterator.hasNext() ? tvResultIterator.next().getId() : null;
             }
         };
     }
 
-    public MovieChangeListDto getChangedMovies(int page,String date) {
+    public TVChangeListDto getChangedTVS(int page,String date) {
         return webClient.get()
-                .uri("/movie/changes?page=" + page +"&start_date="+date+"&end_date="+date)
+                .uri("/tv/changes?page=" + page +"&start_date="+date+"&end_date="+date)
                 .retrieve()
-                .bodyToMono(MovieChangeListDto.class)
+                .bodyToMono(TVChangeListDto.class)
                 .block();
     }
 
 
     @Bean
-    public AsyncItemProcessor<Long, Program> asyncUpdateItemProcessor(){
+    public AsyncItemProcessor<Long, Program> asyncUpdateTVProcessor(){
         final AsyncItemProcessor<Long,Program> processor = new AsyncItemProcessor<>();
-        processor.setDelegate(movieUpdateProcessor());
+        processor.setDelegate(tvUpdateProcessor());
         processor.setTaskExecutor(apiExecutor);
 
         return processor;
     }
     @Bean
-    public ItemProcessor<Long, Program> movieUpdateProcessor() {
-        return movieId -> {
+    public ItemProcessor<Long, Program> tvUpdateProcessor() {
+        return tvId -> {
             // API를 통해 영화 상세 정보 조회
-            log.info("API 호출 현재 영화: {}",movieId);
+            log.info("API 호출 현재 tv: {}",tvId);
 
             try{
-                OpenApiMovieDetailDto openApiMovieDetailDto = getApiProgram(movieId);
+                OpenApiTVDetailDto openApiTVDetailDto = getApiProgram(tvId);
 
 
-                String originalCountryName = (openApiMovieDetailDto.getProductionCountries() == null
-                        || openApiMovieDetailDto.getProductionCountries().isEmpty())
-                        ? null : openApiMovieDetailDto.getProductionCountries().get(0).getName();
+                String originalCountryName = (openApiTVDetailDto.getProductionCountries() == null
+                        || openApiTVDetailDto.getProductionCountries().isEmpty())
+                        ? null : openApiTVDetailDto.getProductionCountries().get(0).getName();
 
-                return programRepository.findByTmDbProgramIdAndTypeWithGenre(movieId,ProgramType.Movie).map(program->{
-                    program.update(openApiMovieDetailDto.getTitle(), openApiMovieDetailDto.getPoster_path(),
-                            openApiMovieDetailDto.getReleaseDate().length() >= 4 ? openApiMovieDetailDto.getReleaseDate().substring(0, 4) : null,
-                            openApiMovieDetailDto.getReleaseDate(),originalCountryName,openApiMovieDetailDto.getOriginal_title(),
-                            openApiMovieDetailDto.getOverview(),openApiMovieDetailDto.getTagline(),openApiMovieDetailDto.getBackdrop_path());
+                String year = openApiTVDetailDto.getFirstAirDate()==null?null:
+                        (openApiTVDetailDto.getFirstAirDate().length() >= 4 ? openApiTVDetailDto.getFirstAirDate().substring(0, 4) : null);
+
+                return programRepository.findByTmDbProgramIdAndTypeWithGenre(tvId, ProgramType.TV).map(program->{
+                    program.update(openApiTVDetailDto.getName(), openApiTVDetailDto.getPoster_path(),
+                            year,
+                            openApiTVDetailDto.getFirstAirDate(),originalCountryName,openApiTVDetailDto.getOriginalName(),
+                            openApiTVDetailDto.getOverview(),openApiTVDetailDto.getTagline(),openApiTVDetailDto.getBackdrop_path());
 
 
                     program.getProgramGenreList().clear();
-                    openApiMovieDetailDto.getTmDbGenreInfos().forEach(genreInfo -> {
+                    openApiTVDetailDto.getTmDbGenreInfos().forEach(genreInfo -> {
                         Genre genre = genreRepository.findByTmDbGenreId(genreInfo.getId()).orElseThrow();
                         program.addGenre(genre);
                     });
 
                     return program;
 
-                }).orElse(makeProgram(movieId,openApiMovieDetailDto));
+                }).orElse(makeProgram(tvId,openApiTVDetailDto));
             }catch (WebClientResponseException e){
                 if(e.getMessage().contains("404 Not Found")){
-                    log.info("삭제된 영화 아이디 {}",movieId);
-                    return programRepository.findByTmDbProgramIdAndType(movieId,ProgramType.Movie)
+                    log.info("삭제된 TV 아이디 {}",tvId);
+                    return programRepository.findByTmDbProgramIdAndType(tvId,ProgramType.TV)
                             .map(program -> {
                                 program.makeWillDelete();
                                 return program;
@@ -180,60 +185,61 @@ public class MovieUpdateJobConfig {
         };
     }
 
-    private OpenApiMovieDetailDto getApiProgram(long movieId) throws NotFoundException {
+    private OpenApiTVDetailDto getApiProgram(long tvId) throws NotFoundException {
 
-        OpenApiMovieDetailDto openApiMovieDetailDto = webClient.get()
-                .uri("/movie/"+movieId+"?language=ko")
+        OpenApiTVDetailDto openApiTVDetailDto = webClient.get()
+                .uri("/movie/"+tvId+"?language=ko")
                 .retrieve()
-                .bodyToMono(OpenApiMovieDetailDto.class)
+                .bodyToMono(OpenApiTVDetailDto.class)
                 .block();
 
-        return openApiMovieDetailDto;
+        return openApiTVDetailDto;
 
     }
 
 
     @Bean
-    public AsyncItemWriter<Program> asyncJpaUpdateWriter(){
+    public AsyncItemWriter<Program> asyncJpaTVUpdateWriter(){
         final AsyncItemWriter<Program> writer = new AsyncItemWriter<>();
-        writer.setDelegate(jpaMovieUpdateItemWriter(entityManagerFactory));
+        writer.setDelegate(jpaTVUpdateItemWriter(entityManagerFactory));
 
         return writer;
     }
     @Bean
-    public JpaItemWriter<Program> jpaMovieUpdateItemWriter(EntityManagerFactory entityManagerFactory) {
+    public JpaItemWriter<Program> jpaTVUpdateItemWriter(EntityManagerFactory entityManagerFactory) {
         JpaItemWriter<Program> writer = new JpaItemWriter<>();
         writer.setEntityManagerFactory(entityManagerFactory);
         return writer;
     }
 
-    private Program makeProgram(Long movieId, OpenApiMovieDetailDto openApiMovieDetailDto){
+    private Program makeProgram(Long movieId, OpenApiTVDetailDto openApiTVDetailDto){
 
-        String originalCountryName = (openApiMovieDetailDto.getProductionCountries() == null
-                || openApiMovieDetailDto.getProductionCountries().isEmpty())
-                ? null : openApiMovieDetailDto.getProductionCountries().get(0).getName();
+        String originalCountryName = (openApiTVDetailDto.getProductionCountries() == null
+                || openApiTVDetailDto.getProductionCountries().isEmpty())
+                ? null : openApiTVDetailDto.getProductionCountries().get(0).getName();
+
+        String year = openApiTVDetailDto.getFirstAirDate()==null?null:
+                (openApiTVDetailDto.getFirstAirDate().length() >= 4 ? openApiTVDetailDto.getFirstAirDate().substring(0, 4) : null);
 
         Program program = Program.builder()
                 .tmDbProgramId(movieId)
-                .title(openApiMovieDetailDto.getTitle())
-                .originalTitle(openApiMovieDetailDto.getOriginal_title())
-                .createdDate(openApiMovieDetailDto.getReleaseDate())
-                .createdYear(openApiMovieDetailDto.getReleaseDate().length() >= 4 ? openApiMovieDetailDto.getReleaseDate().substring(0, 4) : null)
+                .title(openApiTVDetailDto.getName())
+                .originalTitle(openApiTVDetailDto.getOriginalName())
+                .createdDate(openApiTVDetailDto.getFirstAirDate())
+                .createdYear(year)
                 .originalCountry(originalCountryName)
-                .backDropPath(openApiMovieDetailDto.getBackdrop_path())
-                .type(ProgramType.Movie)
-                .posterPath(openApiMovieDetailDto.getPoster_path())
-                .overView(openApiMovieDetailDto.getOverview())
-                .tagLine(openApiMovieDetailDto.getTagline())
+                .backDropPath(openApiTVDetailDto.getBackdrop_path())
+                .type(ProgramType.TV)
+                .posterPath(openApiTVDetailDto.getPoster_path())
+                .overView(openApiTVDetailDto.getOverview())
+                .tagLine(openApiTVDetailDto.getTagline())
                 .build();
 
-        openApiMovieDetailDto.getTmDbGenreInfos().forEach(genreInfo -> {
+        openApiTVDetailDto.getTmDbGenreInfos().forEach(genreInfo -> {
             Genre genre = genreRepository.findByTmDbGenreId(genreInfo.getId()).orElseThrow();
             program.addGenre(genre);
         });
 
         return program;
     }
-
-
 }
