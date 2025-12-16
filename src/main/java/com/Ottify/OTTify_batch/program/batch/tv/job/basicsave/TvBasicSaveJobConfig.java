@@ -1,5 +1,6 @@
 package com.Ottify.OTTify_batch.program.batch.tv.job.basicsave;
 
+import com.Ottify.OTTify_batch.program.batch.listener.JobListener;
 import com.Ottify.OTTify_batch.program.batch.movie.dto.OpenApiMovieDetailDto;
 import com.Ottify.OTTify_batch.program.batch.movie.job.basicsave.dto.MovieJsonReadDto;
 import com.Ottify.OTTify_batch.program.batch.movie.job.basicsave.reader.JsonLineMapper;
@@ -49,10 +50,12 @@ public class TvBasicSaveJobConfig {
     private final WebClient webClient;
     private final GenreRepository genreRepository;
     private final TaskExecutor apiExecutor;
+    private final JobListener jobListener;
 
     @Bean
     public Job tvBasicSaveJob(Step tvBasicSaveStep) {
         return new JobBuilder("tvBasicSaveJob",jobRepository)
+                .listener(jobListener)
                 .start(tvBasicSaveStep)
                 .build();
     }
