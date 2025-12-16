@@ -1,5 +1,6 @@
 package com.Ottify.OTTify_batch.program.batch.movie.job.update;
 
+import com.Ottify.OTTify_batch.program.batch.listener.JobListener;
 import com.Ottify.OTTify_batch.program.batch.movie.dto.OpenApiMovieDetailDto;
 import com.Ottify.OTTify_batch.program.batch.movie.job.update.dto.ChangeMovieResultDto;
 import com.Ottify.OTTify_batch.program.batch.movie.job.update.dto.MovieChangeListDto;
@@ -47,6 +48,7 @@ public class MovieUpdateJobConfig {
     private final GenreRepository genreRepository;
     private final EntityManagerFactory entityManagerFactory;
     private final TaskExecutor apiExecutor;
+    private final JobListener jobListener;
 
 
 
@@ -55,6 +57,7 @@ public class MovieUpdateJobConfig {
     @Bean
     public Job movieUpdateJob() {
         return new JobBuilder("movieUpdateJob",jobRepository)
+                .listener(jobListener)
                 .start(movieUpdateStep())
                 .build();
     }
